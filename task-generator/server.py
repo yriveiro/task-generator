@@ -16,7 +16,7 @@ class TaskManagerTCPHandler(SocketServer.BaseRequestHandler):
         SocketServer.BaseRequestHandler.__init__(self, request, client_address, server)
 
     def handle(self):
-        self.logger = logging.getLogger(__class__)
+        self.logger = logging.getLogger("TaskManagerTCPHandler")
         # self.request is the TCP socket connected to the client
         self.data = self.request.recv(1024).strip()
         self.logger.debug("{0} wrote: {1}".format(self.client_address[0], self.data))
