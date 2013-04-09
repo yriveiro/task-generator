@@ -7,9 +7,10 @@ import ujson
 #from exceptions import TaskFactoryError, TaskNotIterableError
 
 class JobFactory(object):
-    def __init__(self, **kwargs):
+    def __init__(self, task):
         self.logger = logging.getLogger('JobFactory')
-        self.__dict__.update(kwargs)
+        self.__dict__.update(**task)
+
 
     def __iter__(self):
         self._validate()
@@ -68,7 +69,7 @@ class TaskDisk(object):
     def __init__(self, tfile):
         self._tfile = tfile
 
-    def _read(self):
+    def get(self):
         with open(self._tfile) as tfile:
             task = ujson.loads(tfile.read())
             task['parent'] = self._tfile
@@ -78,7 +79,8 @@ class TaskDisk(object):
         os.rename(self._tfile, self._tfile + '.queue')
 
     def __call__(self):
-        return self._read()
+        return self.get()
+
 
 class TaskDatabaseFactory(object):
     pass

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import SocketServer
 import threading
+import Queue
 import logging
 import time
 from factory import TaskDiskFactory, JobFactory
@@ -15,7 +16,7 @@ class TaskManagerTCPHandler(SocketServer.BaseRequestHandler):
         SocketServer.BaseRequestHandler.__init__(self, request, client_address, server)
 
     def handle(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(__class__)
         # self.request is the TCP socket connected to the client
         self.data = self.request.recv(1024).strip()
         self.logger.debug("{0} wrote: {1}".format(self.client_address[0], self.data))
@@ -24,6 +25,10 @@ class TaskManagerTCPHandler(SocketServer.BaseRequestHandler):
             self.request.sendall(self.server.stop())
         if self.data == 'start':
             self.request.sendall(self.server.start())
+        if self.data == 'get':
+            self.request.send(self.server.get())
+        if self.data == 'status':
+            self.request.send(self.server.status())
         if self.data == 'kill':
             self.request.sendall('Killing ...')
             self.server.kill()
@@ -40,6 +45,7 @@ class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.running = False
         self.tfactory = task_factory
         self.jfactory = job_factory
+        self.queue = Queue.Queue()
 
     def start(self):
         if not self.is_running():
@@ -64,8 +70,9 @@ class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         while self.running:
             try:
                 for task in self.tfactory():
-                    for job in self.jfactory(**task):
-                        self.logger.debug("Enqueued job {0}".format(job))
+                    for job in self.jfactory(task):
+                        self.queue.put(job)
+                        self.logger.info("Job {0} enqueued.".format(job))
 
             except TaskNotIterableError:
                 self.logger.warning("Task dropped, not iterable.")
@@ -73,7 +80,7 @@ class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
                 self.logger.info('Nothing to do, I go to sleep a while.')
                 time.sleep(1)
 
-        self.logger.info("Worker stopped.")
+        self.logger.info("Task generator worker stopped.")
 
     def is_running(self):
         return self.running
@@ -82,6 +89,14 @@ class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.stop()
         self.shutdown()
         self.logger.info("Server shuting down ...")
+
+    def get(self):
+        elem = self.queue.get()
+        self.queue.task_done()
+        return str(elem)
+
+    def status(self):
+        return "QS:{0}".format(self.queue.qsize())
 
 if __name__ == "__main__":
     logger = logging.getLogger("Server")
