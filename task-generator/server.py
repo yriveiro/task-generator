@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
+import sys
 import SocketServer
 import threading
 import Queue
 import logging
 import time
 from factory import TaskDiskFactory, JobFactory
-
+from exception import TaskNotIterableError
 
 logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s',)
 
-class TaskNotIterableError(Exception): pass
 
 class TaskManagerTCPHandler(SocketServer.BaseRequestHandler):
     def __init__(self, request, client_address, server):
@@ -17,21 +17,16 @@ class TaskManagerTCPHandler(SocketServer.BaseRequestHandler):
 
     def handle(self):
         self.logger = logging.getLogger("TaskManagerTCPHandler")
-        # self.request is the TCP socket connected to the client
+
         self.data = self.request.recv(1024).strip()
         self.logger.debug("{0} wrote: {1}".format(self.client_address[0], self.data))
 
-        if self.data == 'stop':
-            self.request.sendall(self.server.stop())
-        if self.data == 'start':
-            self.request.sendall(self.server.start())
-        if self.data == 'get':
-            self.request.send(self.server.get())
-        if self.data == 'status':
-            self.request.send(self.server.status())
-        if self.data == 'kill':
-            self.request.sendall('Killing ...')
-            self.server.kill()
+        try:
+            cmd = getattr(self.server, self.data)
+            self.request.send(cmd())
+        except AttributeError:
+            self.request.sendall("Command not supported.")
+
 
 
 class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
@@ -87,9 +82,12 @@ class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         return self.running
 
     def kill(self):
-        self.stop()
-        self.shutdown()
-        self.logger.info("Server shuting down ...")
+        try:
+            self.stop()
+            return "Server shuting down ..."
+        finally:
+            self.shutdown()
+            self.logger.info("Server shuting down ...")
 
     def get(self):
         try:
@@ -122,4 +120,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         server.shutdown()
         logger.info("Server shuting down ...")
+        sys.exit(0)
 
