@@ -11,7 +11,6 @@ class JobFactory(object):
         self.logger = logging.getLogger('JobFactory')
         self.__dict__.update(**task)
 
-
     def __iter__(self):
         self._validate()
 

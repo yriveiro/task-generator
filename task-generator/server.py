@@ -46,6 +46,7 @@ class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.tfactory = task_factory
         self.jfactory = job_factory
         self.queue = Queue.Queue()
+        self.lock = threading.Lock()
 
     def start(self):
         if not self.is_running():
@@ -91,9 +92,15 @@ class TaskManagerServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.logger.info("Server shuting down ...")
 
     def get(self):
-        elem = self.queue.get()
-        self.queue.task_done()
-        return str(elem)
+        try:
+            with self.lock:
+                elem = self.queue.get()
+                return str(elem)
+        except:
+            self.queue.put(elem)
+            self.logger.warning("Task enqueue again, exception thown.")
+        finally:
+            self.queue.task_done()
 
     def status(self):
         return "QS:{0}".format(self.queue.qsize())
